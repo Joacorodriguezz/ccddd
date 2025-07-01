@@ -1,0 +1,2 @@
+Descargar Node.JS: https://nodejs.org/en/download/
+Instalar ChartJS (Ejecutar en la terminal una vez abierto el proyecto en vscode):npm install chart.js react-chartjs-2
