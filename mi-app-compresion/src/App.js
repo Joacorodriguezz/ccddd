@@ -6,6 +6,235 @@ import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+// Componente para visualizar el árbol de Huffman con pan y zoom
+const HuffmanTreeVisualization = ({ tree, codes }) => {
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const svgRef = useRef(null);
+
+    if (!tree) return null;
+
+    const handleMouseDown = (e) => {
+        setIsDragging(true);
+        setDragStart({
+            x: e.clientX - pan.x,
+            y: e.clientY - pan.y
+        });
+    };
+
+    const handleMouseMove = (e) => {
+        if (isDragging) {
+            setPan({
+                x: e.clientX - dragStart.x,
+                y: e.clientY - dragStart.y
+            });
+        }
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newZoom = Math.max(0.5, Math.min(3, zoom * delta));
+        setZoom(newZoom);
+    };
+
+    const handleDoubleClick = () => {
+        setPan({ x: 0, y: 0 });
+        setZoom(1);
+    };
+
+    const renderNode = (node, x, y, level, maxLevel, width) => {
+        if (!node) return null;
+        
+        const nodeWidth = 45; // Reducido de 50 a 45
+        const nodeHeight = 30; // Reducido de 35 a 30
+        const verticalSpacing = 45; // Reducido de 60 a 45
+        const horizontalSpacing = width / Math.pow(2, level + 1) * 0.6; // Reducido más el espaciado horizontal
+        
+        const nodeColor = node.char !== null ? '#3B82F6' : '#10B981';
+        const textColor = node.char !== null ? 'white' : 'black';
+        const displayText = node.char !== null ? 
+            (node.char === ' ' ? 'Space' : node.char === '\n' ? '\\n' : node.char) : 
+            `${node.freq}`;
+
+        return (
+            <g key={`${x}-${y}-${level}`}>
+                {/* Líneas de conexión */}
+                {node.left && (
+                    <line
+                        x1={x}
+                        y1={y + nodeHeight/2}
+                        x2={x - horizontalSpacing}
+                        y2={y + verticalSpacing - nodeHeight/2}
+                        stroke="#6B7280"
+                        strokeWidth="2"
+                    />
+                )}
+                {node.right && (
+                    <line
+                        x1={x}
+                        y1={y + nodeHeight/2}
+                        x2={x + horizontalSpacing}
+                        y2={y + verticalSpacing - nodeHeight/2}
+                        stroke="#6B7280"
+                        strokeWidth="2"
+                    />
+                )}
+                
+                {/* Nodo */}
+                <rect
+                    x={x - nodeWidth/2}
+                    y={y}
+                    width={nodeWidth}
+                    height={nodeHeight}
+                    rx="8"
+                    fill={nodeColor}
+                    stroke="#1F2937"
+                    strokeWidth="2"
+                    className="huffman-tree-node"
+                    style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                />
+                
+                {/* Texto del nodo */}
+                <text
+                    x={x}
+                    y={y + nodeHeight/2 + 2}
+                    textAnchor="middle"
+                    fill={textColor}
+                    fontSize="10"
+                    fontWeight="bold"
+                >
+                    {displayText}
+                </text>
+                
+                {/* Código Huffman para nodos hoja */}
+                {node.char !== null && codes[node.char] && (
+                    <text
+                        x={x}
+                        y={y + nodeHeight + 8}
+                        textAnchor="middle"
+                        fill="#6B7280"
+                        fontSize="8"
+                        fontFamily="monospace"
+                        className="font-mono"
+                    >
+                        {codes[node.char]}
+                    </text>
+                )}
+                
+                {/* Etiquetas de las ramas */}
+                {node.left && (
+                    <text
+                        x={x - horizontalSpacing/2}
+                        y={y + verticalSpacing/2}
+                        textAnchor="middle"
+                        fill="#6B7280"
+                        fontSize="8"
+                        fontWeight="bold"
+                    >
+                        0
+                    </text>
+                )}
+                {node.right && (
+                    <text
+                        x={x + horizontalSpacing/2}
+                        y={y + verticalSpacing/2}
+                        textAnchor="middle"
+                        fill="#6B7280"
+                        fontSize="8"
+                        fontWeight="bold"
+                    >
+                        1
+                    </text>
+                )}
+                
+                {/* Nodos hijos */}
+                {node.left && renderNode(
+                    node.left, 
+                    x - horizontalSpacing, 
+                    y + verticalSpacing, 
+                    level + 1, 
+                    maxLevel, 
+                    width
+                )}
+                {node.right && renderNode(
+                    node.right, 
+                    x + horizontalSpacing, 
+                    y + verticalSpacing, 
+                    level + 1, 
+                    maxLevel, 
+                    width
+                )}
+            </g>
+        );
+    };
+
+    const getTreeHeight = (node) => {
+        if (!node) return 0;
+        return 1 + Math.max(getTreeHeight(node.left), getTreeHeight(node.right));
+    };
+
+    const treeHeight = getTreeHeight(tree);
+    const svgWidth = 800; // Reducido más para que los nodos estén aún más cercanos
+    const startX = svgWidth / 2;
+    const startY = 30;
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-md border border-blue-200">
+            <h3 className="text-xl font-semibold text-blue-600 mb-4">Árbol de Huffman Interactivo</h3>
+            <p className="text-sm text-gray-600 mb-4">
+                Arrastra con el mouse para mover el diagrama, usa la rueda del mouse para hacer zoom. 
+                Doble clic para centrar y resetear zoom.
+            </p>
+            <div 
+                className="huffman-tree-container w-full"
+                style={{ height: '400px' }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+                onDoubleClick={handleDoubleClick}
+            >
+                <svg 
+                    ref={svgRef}
+                    width="100%" 
+                    height="100%" 
+                    className="huffman-tree-svg"
+                    style={{ 
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        userSelect: 'none'
+                    }}
+                >
+                    <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+                        {renderNode(tree, startX, startY, 0, treeHeight, svgWidth)}
+                    </g>
+                </svg>
+            </div>
+            <div className="huffman-tree-legend">
+                <div className="huffman-tree-legend-item">
+                    <span className="huffman-tree-legend-dot internal"></span>
+                    <span>Nodos internos (frecuencia total)</span>
+                </div>
+                <div className="huffman-tree-legend-item">
+                    <span className="huffman-tree-legend-dot leaf"></span>
+                    <span>Nodos hoja (símbolos)</span>
+                </div>
+                <div className="huffman-tree-legend-item">
+                    <span className="font-mono font-bold">0/1</span>
+                    <span>Etiquetas de las ramas</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const App = () => {
     const [inputText, setInputText] = useState("aaaaabcde");
     const [originalBytes, setOriginalBytes] = useState(0);
@@ -15,6 +244,8 @@ const App = () => {
     const [huffmanAvgLength, setHuffmanAvgLength] = useState(0);
     const [huffmanCompressionRatio, setHuffmanCompressionRatio] = useState(0);
     const [huffmanEfficiency, setHuffmanEfficiency] = useState(0);
+    const [huffmanTree, setHuffmanTree] = useState(null);
+    const [huffmanCodes, setHuffmanCodes] = useState({});
 
     const [encodedShannonFano, setEncodedShannonFano] = useState('');
     const [decodedShannonFano, setDecodedShannonFano] = useState('');
@@ -38,10 +269,20 @@ const App = () => {
         }
     }
 
-    const getFrequencies = (text) => {
+    // NUEVO: función para agrupar en bigramas
+    const toBigrams = (text) => {
+        const bigrams = [];
+        for (let i = 0; i < text.length; i += 2) {
+            bigrams.push(text.slice(i, i + 2));
+        }
+        return bigrams;
+    };
+
+    const getFrequencies = (text, useBigrams = false) => {
         const frequencies = {};
-        for (let char of text) {
-            frequencies[char] = (frequencies[char] || 0) + 1;
+        const units = useBigrams ? toBigrams(text) : text.split('');
+        for (let unit of units) {
+            frequencies[unit] = (frequencies[unit] || 0) + 1;
         }
         return frequencies;
     };
@@ -85,19 +326,26 @@ const App = () => {
         return decodedText;
     };
 
+    // Corregido: Shannon-Fano para bigramas y división correcta
     const generateShannonFanoCodes = (frequencies) => {
         let symbols = Object.keys(frequencies).map(char => ({ char, freq: frequencies[char], code: '' }));
+        // Ordenar por probabilidad descendente
         symbols.sort((a, b) => b.freq - a.freq);
 
         const divide = (arr) => {
             if (arr.length <= 1) return;
+            // Ordenar por probabilidad descendente en cada división
+            arr.sort((a, b) => b.freq - a.freq);
             let total = arr.reduce((sum, s) => sum + s.freq, 0);
-            let acc = 0, splitIndex = -1;
+            let acc = 0, splitIndex = -1, minDiff = Infinity;
             for (let i = 0; i < arr.length - 1; i++) {
                 acc += arr[i].freq;
-                if (acc >= total / 2) { splitIndex = i; break; }
+                let diff = Math.abs(total / 2 - acc);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    splitIndex = i;
+                }
             }
-            if (splitIndex === -1) splitIndex = Math.floor(arr.length / 2);
             const group1 = arr.slice(0, splitIndex + 1);
             const group2 = arr.slice(splitIndex + 1);
             group1.forEach(s => s.code += '0');
@@ -107,6 +355,8 @@ const App = () => {
         };
 
         divide(symbols);
+        // Ordenar por probabilidad descendente para la tabla
+        symbols.sort((a, b) => b.freq - a.freq);
         return symbols;
     };
 
@@ -146,8 +396,10 @@ const App = () => {
         if (!inputText) return setMessage('Ingrese texto.');
         setMessage('');
 
-        const frequencies = getFrequencies(inputText);
-        const totalSymbols = inputText.length;
+        // --- CAMBIO: usar bigramas ---
+        const useBigrams = true; // Cambia a false si quieres volver a símbolos individuales
+        const frequencies = getFrequencies(inputText, useBigrams);
+        const totalSymbols = useBigrams ? Math.ceil(inputText.length / 2) : inputText.length;
         const originalTextBytes = new TextEncoder().encode(inputText).length;
         setOriginalBytes(originalTextBytes);
 
@@ -157,8 +409,24 @@ const App = () => {
         // HUFFMAN
         const tree = buildHuffmanTree(frequencies);
         const codes = generateHuffmanCodes(tree);
-        const encoded = encodeHuffman(inputText, codes);
-        const decoded = decodeHuffman(encoded, tree);
+        // --- Codificar usando bigramas ---
+        const units = useBigrams ? toBigrams(inputText) : inputText.split('');
+        const encoded = units.map(char => codes[char]).join('');
+        // Decodificar
+        let decoded = '';
+        if (useBigrams) {
+            let currentNode = tree;
+            let buffer = '';
+            for (let bit of encoded) {
+                currentNode = bit === '0' ? currentNode.left : currentNode.right;
+                if (currentNode.char !== null) {
+                    decoded += currentNode.char;
+                    currentNode = tree;
+                }
+            }
+        } else {
+            decoded = decodeHuffman(encoded, tree);
+        }
 
         setHuffmanTable(Object.keys(codes).map(char => {
             const freq = frequencies[char];
@@ -166,7 +434,7 @@ const App = () => {
             const code = codes[char];
             const len = code.length;
             return {
-                symbol: char === '\n' ? '\\n' : char === ' ' ? 'Space' : char,
+                symbol: char,
                 frequency: freq,
                 probability: prob,
                 code,
@@ -183,19 +451,37 @@ const App = () => {
         setHuffmanEfficiency(calculateEfficiency(avgLen, calculatedEntropy));
         setEncodedHuffman(encoded);
         setDecodedHuffman(decoded);
+        setHuffmanTree(tree);
+        setHuffmanCodes(codes);
 
-        // SHANNON-FANO
+        // SHANNON-FANO (corregido para bigramas y división correcta)
         const symbols = generateShannonFanoCodes(frequencies);
         const map = symbols.reduce((acc, s) => ({ ...acc, [s.char]: s.code }), {});
-        const encodedSF = encodeShannonFano(inputText, map);
-        const decodedSF = decodeShannonFano(encodedSF, map);
+        // Codificar usando bigramas
+        const unitsSF = useBigrams ? toBigrams(inputText) : inputText.split('');
+        const encodedSF = unitsSF.map(char => map[char]).join('');
+        // Decodificar
+        let decodedSF = '';
+        if (useBigrams) {
+            let buffer = '';
+            const reverseMap = Object.fromEntries(Object.entries(map).map(([k, v]) => [v, k]));
+            for (let bit of encodedSF) {
+                buffer += bit;
+                if (reverseMap[buffer]) {
+                    decodedSF += reverseMap[buffer];
+                    buffer = '';
+                }
+            }
+        } else {
+            decodedSF = decodeShannonFano(encodedSF, map);
+        }
 
         setShannonFanoTable(symbols.map(s => {
             const freq = frequencies[s.char];
             const prob = freq / totalSymbols;
             const len = s.code.length;
             return {
-                symbol: s.char === '\n' ? '\\n' : s.char === ' ' ? 'Space' : s.char,
+                symbol: s.char,
                 frequency: freq,
                 probability: prob,
                 code: s.code,
@@ -203,7 +489,6 @@ const App = () => {
                 weightedLength: parseFloat((prob * len).toFixed(4))
             };
         }));
-
         const avgSF = calculateAverageCodeLength(frequencies, map, totalSymbols);
         setShannonFanoAvgLength(avgSF);
         setShannonFanoCompressionRatio(calculateCompressionRatio(originalBits, encodedSF.length));
@@ -359,37 +644,52 @@ const App = () => {
                         </span>
                         Algoritmo de Huffman
                     </h2>
+                    
+                    {/* Visualización del Árbol de Huffman */}
+                    <div className="mb-8">
+                        <HuffmanTreeVisualization tree={huffmanTree} codes={huffmanCodes} />
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="text-2xl font-semibold text-blue-600 mb-4">Tabla de Codificación</h3>
-                            <div className="overflow-x-auto rounded-xl border border-blue-200 shadow-md">
-                                <table className="min-w-full divide-y divide-blue-200 bg-white">
+                            <div className="overflow-x-auto rounded-xl border-2 border-blue-400 shadow-md">
+                                <table className="min-w-full divide-y divide-blue-200 bg-white text-center" style={{ borderCollapse: 'collapse' }}>
                                     <thead className="bg-blue-50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider rounded-tl-xl">Símbolo</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Frecuencia</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Probabilidad</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Código Binario</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Longitud</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Símbolo</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Pi</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Codificación</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Longitud palabra</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-blue-100">
-                                        {huffmanTable.map((row, index) => (
-                                            <tr key={index} className="hover:bg-blue-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.symbol}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.frequency}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability.toFixed(4)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono break-all">{row.code}</td>
-                                                <td>{row.weightedLength.toFixed(4)}</td>
-                                               {/*  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability * row.length}</td> */}
-                                            </tr>
+                                        {huffmanTable
+                                            .slice()
+                                            .sort((a, b) => b.probability - a.probability)
+                                            .map((row, index) => (
+                                                <tr key={index} className="hover:bg-blue-50">
+                                                    <td className="px-6 py-3 border border-blue-200 font-mono">{row.symbol}</td>
+                                                    <td className="px-6 py-3 border border-blue-200">{row.probability.toFixed(3)}</td>
+                                                    <td className="px-6 py-3 border border-blue-200 font-mono">{row.code}</td>
+                                                    <td className="px-6 py-3 border border-blue-200">{(row.probability * row.length).toFixed(3)}</td>
+                                                </tr>
                                         ))}
+                                        <tr className="bg-blue-100 font-bold">
+                                            <td colSpan={3} className="px-6 py-3 border border-blue-300 text-right">Σ L =</td>
+                                            <td className="px-6 py-3 border border-blue-300">{huffmanTable.reduce((acc, row) => acc + row.probability * row.length, 0).toFixed(3)}</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <p className="mt-4 text-gray-700 text-lg">
-                                Longitud promedio del código: <span className="font-semibold text-blue-600">{huffmanAvgLength.toFixed(4)}</span> bits/símbolo
-                            </p>
+                            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-left">
+                                <div className="mb-2 font-semibold text-blue-700">Cálculo de la eficiencia</div>
+                                <div className="font-mono text-sm text-gray-700">
+                                    <div>H = {huffmanTable.map(row => `(${row.probability.toFixed(3)}·${row.length})`).join(' + ')} = {huffmanAvgLength.toFixed(3)} bits/símbolo</div>
+                                    <div className="mt-2">Entropía (H): <span className="font-bold">{entropy.toFixed(3)}</span> bits/símbolo</div>
+                                    <div>Eficiencia: <span className="font-bold">{((entropy / huffmanAvgLength) * 100).toFixed(1)}%</span></div>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <h3 className="text-2xl font-semibold text-blue-600 mb-4">Texto Comprimido</h3>
@@ -416,34 +716,43 @@ const App = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                             <h3 className="text-2xl font-semibold text-green-600 mb-4">Tabla de Codificación</h3>
-                            <div className="overflow-x-auto rounded-xl border border-green-200 shadow-md">
-                                <table className="min-w-full divide-y divide-green-200 bg-white">
+                            <div className="overflow-x-auto rounded-xl border-2 border-green-400 shadow-md">
+                                <table className="min-w-full divide-y divide-green-200 bg-white text-center" style={{ borderCollapse: 'collapse' }}>
                                     <thead className="bg-green-50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider rounded-tl-xl">Símbolo</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Frecuencia</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Probabilidad</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Código Binario</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Longitud</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-green-700 uppercase tracking-wider border border-green-300">Símbolo</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-green-700 uppercase tracking-wider border border-green-300">Probabilidad</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-green-700 uppercase tracking-wider border border-green-300">Codificación</th>
+                                            <th className="px-6 py-3 text-xs font-bold text-green-700 uppercase tracking-wider border border-green-300">Longitud palabra</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-green-100">
-                                        {shannonFanoTable.map((row, index) => (
-                                            <tr key={index} className="hover:bg-green-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.symbol}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.frequency}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono break-all">{row.code}</td>
-                                                <td>{row.weightedLength.toFixed(4)}</td>
-                                               {/*  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability * row.length}</td> */}
-                                            </tr>
+                                        {shannonFanoTable
+                                            .slice()
+                                            .sort((a, b) => b.probability - a.probability)
+                                            .map((row, index) => (
+                                                <tr key={index} className="hover:bg-green-50">
+                                                    <td className="px-6 py-3 border border-green-200 font-mono">{row.symbol}</td>
+                                                    <td className="px-6 py-3 border border-green-200">{row.probability.toFixed(3)}</td>
+                                                    <td className="px-6 py-3 border border-green-200 font-mono">{row.code}</td>
+                                                    <td className="px-6 py-3 border border-green-200">{(row.probability * row.length).toFixed(3)}</td>
+                                                </tr>
                                         ))}
+                                        <tr className="bg-green-100 font-bold">
+                                            <td colSpan={3} className="px-6 py-3 border border-green-300 text-right">Σ L =</td>
+                                            <td className="px-6 py-3 border border-green-300">{shannonFanoTable.reduce((acc, row) => acc + row.probability * row.length, 0).toFixed(3)}</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <p className="mt-4 text-gray-700 text-lg">
-                                Longitud promedio del código: <span className="font-semibold text-green-600">{shannonFanoAvgLength.toFixed(4)}</span> bits/símbolo
-                            </p>
+                            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl text-left">
+                                <div className="mb-2 font-semibold text-green-700">Cálculo de la eficiencia</div>
+                                <div className="font-mono text-sm text-gray-700">
+                                    <div>H = {shannonFanoTable.map(row => `(${row.probability.toFixed(3)}·${row.length})`).join(' + ')} = {shannonFanoAvgLength.toFixed(3)} bits/símbolo</div>
+                                    <div className="mt-2">Entropía (H): <span className="font-bold">{entropy.toFixed(3)}</span> bits/símbolo</div>
+                                    <div>Eficiencia: <span className="font-bold">{((entropy / shannonFanoAvgLength) * 100).toFixed(1)}%</span></div>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <h3 className="text-2xl font-semibold text-green-600 mb-4">Texto Comprimido</h3>
@@ -508,6 +817,8 @@ const App = () => {
                         <p>Longitud Shannon-Fano Comprimido: <span className="font-bold text-green-600">{encodedShannonFano.length.toFixed(4)}</span> bits</p>
                     </div>
                 </section>
+
+
 
                 {/* Pie de página */}
                 <footer className="text-center text-gray-500 text-sm mt-12">
