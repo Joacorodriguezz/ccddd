@@ -13,83 +13,85 @@ const HuffmanTreeVisualization = ({ tree, codes }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const svgRef = useRef(null);
+    const internalNodeCounter = useRef(1); // Contador para nodos internos
 
     if (!tree) return null;
 
     const handleMouseDown = (e) => {
         setIsDragging(true);
-        setDragStart({
-            x: e.clientX - pan.x,
-            y: e.clientY - pan.y
-        });
+        setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     };
-
     const handleMouseMove = (e) => {
         if (isDragging) {
-            setPan({
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y
-            });
+            setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
         }
     };
-
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
-
+    const handleMouseUp = () => setIsDragging(false);
     const handleWheel = (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        const newZoom = Math.max(0.5, Math.min(3, zoom * delta));
+        const newZoom = Math.max(0.4, Math.min(2.5, zoom * delta));
         setZoom(newZoom);
     };
-
     const handleDoubleClick = () => {
         setPan({ x: 0, y: 0 });
         setZoom(1);
     };
 
-    const renderNode = (node, x, y, level, maxLevel, width) => {
+    // Construye un árbol completo para asegurar ramas simétricas
+    const completeTree = (node, depth = 0) => {
         if (!node) return null;
-        
-        const nodeWidth = 45; // Reducido de 50 a 45
-        const nodeHeight = 30; // Reducido de 35 a 30
-        const verticalSpacing = 45; // Reducido de 60 a 45
-        const horizontalSpacing = width / Math.pow(2, level + 1) * 0.6; // Reducido más el espaciado horizontal
-        
+        const newNode = { ...node };
+        if (!newNode.left && !newNode.right && newNode.char === null) return null;
+        if (newNode.char !== null) return newNode;
+        newNode.left = newNode.left || { char: null, freq: 0, left: null, right: null };
+        newNode.right = newNode.right || { char: null, freq: 0, left: null, right: null };
+        newNode.left = completeTree(newNode.left, depth + 1);
+        newNode.right = completeTree(newNode.right, depth + 1);
+        return newNode;
+    };
+
+    const completedTree = completeTree(tree);
+
+    // Modificado: agrega un contador para los nodos internos
+    const renderTree = (node, x, y, spacing, level = 0, internalCounter = { value: 1 }) => {
+        if (!node) return null;
+
+        const nodeWidth = 45;
+        const nodeHeight = 30;
+        const verticalSpacing = 70;
+
         const nodeColor = node.char !== null ? '#3B82F6' : '#10B981';
         const textColor = node.char !== null ? 'white' : 'black';
-        const displayText = node.char !== null ? 
-            (node.char === ' ' ? 'Space' : node.char === '\n' ? '\\n' : node.char) : 
-            `${node.freq}`;
+        let displayText;
+        if (node.char !== null) {
+            displayText = node.char === ' ' ? 'Space' : node.char === '\n' ? '\\n' : node.char;
+        } else {
+            displayText = `nodo ${internalCounter.value++}`;
+        }
+
+        const leftX = x - spacing / 2;
+        const rightX = x + spacing / 2;
+        const nextY = y + verticalSpacing;
 
         return (
             <g key={`${x}-${y}-${level}`}>
-                {/* Líneas de conexión */}
                 {node.left && (
-                    <line
-                        x1={x}
-                        y1={y + nodeHeight/2}
-                        x2={x - horizontalSpacing}
-                        y2={y + verticalSpacing - nodeHeight/2}
-                        stroke="#6B7280"
-                        strokeWidth="2"
-                    />
+                    <>
+                        <line x1={x} y1={y + nodeHeight} x2={leftX} y2={nextY} stroke="#6B7280" strokeWidth="2" />
+                        <text x={(x + leftX) / 2 - 5} y={(y + nextY) / 2} fontSize="10" fill="#6B7280">0</text>
+                        {renderTree(node.left, leftX, nextY, spacing / 2, level + 1, internalCounter)}
+                    </>
                 )}
                 {node.right && (
-                    <line
-                        x1={x}
-                        y1={y + nodeHeight/2}
-                        x2={x + horizontalSpacing}
-                        y2={y + verticalSpacing - nodeHeight/2}
-                        stroke="#6B7280"
-                        strokeWidth="2"
-                    />
+                    <>
+                        <line x1={x} y1={y + nodeHeight} x2={rightX} y2={nextY} stroke="#6B7280" strokeWidth="2" />
+                        <text x={(x + rightX) / 2 + 5} y={(y + nextY) / 2} fontSize="10" fill="#6B7280">1</text>
+                        {renderTree(node.right, rightX, nextY, spacing / 2, level + 1, internalCounter)}
+                    </>
                 )}
-                
-                {/* Nodo */}
                 <rect
-                    x={x - nodeWidth/2}
+                    x={x - nodeWidth / 2}
                     y={y}
                     width={nodeWidth}
                     height={nodeHeight}
@@ -97,14 +99,10 @@ const HuffmanTreeVisualization = ({ tree, codes }) => {
                     fill={nodeColor}
                     stroke="#1F2937"
                     strokeWidth="2"
-                    className="huffman-tree-node"
-                    style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
                 />
-                
-                {/* Texto del nodo */}
                 <text
                     x={x}
-                    y={y + nodeHeight/2 + 2}
+                    y={y + nodeHeight / 2 + 4}
                     textAnchor="middle"
                     fill={textColor}
                     fontSize="10"
@@ -112,78 +110,26 @@ const HuffmanTreeVisualization = ({ tree, codes }) => {
                 >
                     {displayText}
                 </text>
-                
-                {/* Código Huffman para nodos hoja */}
                 {node.char !== null && codes[node.char] && (
                     <text
                         x={x}
-                        y={y + nodeHeight + 8}
+                        y={y + nodeHeight + 12}
                         textAnchor="middle"
                         fill="#6B7280"
                         fontSize="8"
                         fontFamily="monospace"
-                        className="font-mono"
                     >
                         {codes[node.char]}
                     </text>
-                )}
-                
-                {/* Etiquetas de las ramas */}
-                {node.left && (
-                    <text
-                        x={x - horizontalSpacing/2}
-                        y={y + verticalSpacing/2}
-                        textAnchor="middle"
-                        fill="#6B7280"
-                        fontSize="8"
-                        fontWeight="bold"
-                    >
-                        0
-                    </text>
-                )}
-                {node.right && (
-                    <text
-                        x={x + horizontalSpacing/2}
-                        y={y + verticalSpacing/2}
-                        textAnchor="middle"
-                        fill="#6B7280"
-                        fontSize="8"
-                        fontWeight="bold"
-                    >
-                        1
-                    </text>
-                )}
-                
-                {/* Nodos hijos */}
-                {node.left && renderNode(
-                    node.left, 
-                    x - horizontalSpacing, 
-                    y + verticalSpacing, 
-                    level + 1, 
-                    maxLevel, 
-                    width
-                )}
-                {node.right && renderNode(
-                    node.right, 
-                    x + horizontalSpacing, 
-                    y + verticalSpacing, 
-                    level + 1, 
-                    maxLevel, 
-                    width
                 )}
             </g>
         );
     };
 
-    const getTreeHeight = (node) => {
-        if (!node) return 0;
-        return 1 + Math.max(getTreeHeight(node.left), getTreeHeight(node.right));
-    };
-
-    const treeHeight = getTreeHeight(tree);
-    const svgWidth = 800; // Reducido más para que los nodos estén aún más cercanos
-    const startX = svgWidth / 2;
-    const startY = 30;
+    const svgWidth = 900;
+    const svgHeight = 500;
+    const centerX = svgWidth / 2;
+    const startY = 20;
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-md border border-blue-200">
@@ -192,9 +138,9 @@ const HuffmanTreeVisualization = ({ tree, codes }) => {
                 Arrastra con el mouse para mover el diagrama, usa la rueda del mouse para hacer zoom. 
                 Doble clic para centrar y resetear zoom.
             </p>
-            <div 
+            <div
                 className="huffman-tree-container w-full"
-                style={{ height: '400px' }}
+                style={{ height: '500px' }}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -202,38 +148,21 @@ const HuffmanTreeVisualization = ({ tree, codes }) => {
                 onWheel={handleWheel}
                 onDoubleClick={handleDoubleClick}
             >
-                <svg 
+                <svg
                     ref={svgRef}
-                    width="100%" 
-                    height="100%" 
-                    className="huffman-tree-svg"
-                    style={{ 
-                        cursor: isDragging ? 'grabbing' : 'grab',
-                        userSelect: 'none'
-                    }}
+                    width="100%"
+                    height="100%"
+                    style={{ cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
                 >
                     <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-                        {renderNode(tree, startX, startY, 0, treeHeight, svgWidth)}
+                        {renderTree(completedTree, centerX, startY, svgWidth / 2, 0, { value: 1 })}
                     </g>
                 </svg>
-            </div>
-            <div className="huffman-tree-legend">
-                <div className="huffman-tree-legend-item">
-                    <span className="huffman-tree-legend-dot internal"></span>
-                    <span>Nodos internos (frecuencia total)</span>
-                </div>
-                <div className="huffman-tree-legend-item">
-                    <span className="huffman-tree-legend-dot leaf"></span>
-                    <span>Nodos hoja (símbolos)</span>
-                </div>
-                <div className="huffman-tree-legend-item">
-                    <span className="font-mono font-bold">0/1</span>
-                    <span>Etiquetas de las ramas</span>
-                </div>
             </div>
         </div>
     );
 };
+
 
 const App = () => {
     const [inputText, setInputText] = useState("aaaaabcde");
@@ -359,6 +288,33 @@ const App = () => {
         symbols.sort((a, b) => b.freq - a.freq);
         return symbols;
     };
+
+    // Construye el árbol de Shannon-Fano y devuelve la raíz
+    function buildShannonFanoTree(symbols) {
+        if (symbols.length === 1) {
+            return { char: symbols[0].char, freq: symbols[0].freq, left: null, right: null };
+        }
+        // Ordenar por frecuencia descendente
+        symbols.sort((a, b) => b.freq - a.freq);
+        let total = symbols.reduce((sum, s) => sum + s.freq, 0);
+        let acc = 0, splitIndex = -1, minDiff = Infinity;
+        for (let i = 0; i < symbols.length - 1; i++) {
+            acc += symbols[i].freq;
+            let diff = Math.abs(total / 2 - acc);
+            if (diff < minDiff) {
+                minDiff = diff;
+                splitIndex = i;
+            }
+        }
+        const leftGroup = symbols.slice(0, splitIndex + 1);
+        const rightGroup = symbols.slice(splitIndex + 1);
+        return {
+            char: null,
+            freq: total,
+            left: buildShannonFanoTree(leftGroup),
+            right: buildShannonFanoTree(rightGroup)
+        };
+    }
 
     const encodeShannonFano = (text, codesMap) => text.split('').map(char => codesMap[char]).join('');
 
@@ -495,6 +451,9 @@ const App = () => {
         setShannonFanoEfficiency(calculateEfficiency(avgSF, calculatedEntropy));
         setEncodedShannonFano(encodedSF);
         setDecodedShannonFano(decodedSF);
+        const shannonFanoTree = buildShannonFanoTree(symbols);
+        setHuffmanTree(shannonFanoTree); // Esto hará que el árbol visualizado sea el de Shannon-Fano
+        setHuffmanCodes(map); // Y los códigos también serán los de Shannon-Fano
     };
 
     const handleFileUpload = (e) => {
@@ -585,6 +544,21 @@ const App = () => {
         }
     };
 
+    function decodeHuffmanCode(code, tree) {
+      let node = tree;
+      for (let bit of code) {
+        if (bit === "0") {
+          node = node.left;
+        } else if (bit === "1") {
+          node = node.right;
+        } else {
+          return null; // bit inválido
+        }
+        if (!node) return null; // código inválido
+      }
+      return node.char || null;
+    }
+
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8 font-inter text-gray-800">
@@ -649,61 +623,8 @@ const App = () => {
                     <div className="mb-8">
                         <HuffmanTreeVisualization tree={huffmanTree} codes={huffmanCodes} />
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h3 className="text-2xl font-semibold text-blue-600 mb-4">Tabla de Codificación</h3>
-                            <div className="overflow-x-auto rounded-xl border-2 border-blue-400 shadow-md">
-                                <table className="min-w-full divide-y divide-blue-200 bg-white text-center" style={{ borderCollapse: 'collapse' }}>
-                                    <thead className="bg-blue-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Símbolo</th>
-                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Pi</th>
-                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Codificación</th>
-                                            <th className="px-6 py-3 text-xs font-bold text-blue-700 uppercase tracking-wider border border-blue-300">Longitud palabra</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-blue-100">
-                                        {huffmanTable
-                                            .slice()
-                                            .sort((a, b) => b.probability - a.probability)
-                                            .map((row, index) => (
-                                                <tr key={index} className="hover:bg-blue-50">
-                                                    <td className="px-6 py-3 border border-blue-200 font-mono">{row.symbol}</td>
-                                                    <td className="px-6 py-3 border border-blue-200">{row.probability.toFixed(3)}</td>
-                                                    <td className="px-6 py-3 border border-blue-200 font-mono">{row.code}</td>
-                                                    <td className="px-6 py-3 border border-blue-200">{(row.probability * row.length).toFixed(3)}</td>
-                                                </tr>
-                                        ))}
-                                        <tr className="bg-blue-100 font-bold">
-                                            <td colSpan={3} className="px-6 py-3 border border-blue-300 text-right">Σ L =</td>
-                                            <td className="px-6 py-3 border border-blue-300">{huffmanTable.reduce((acc, row) => acc + row.probability * row.length, 0).toFixed(3)}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-left">
-                                <div className="mb-2 font-semibold text-blue-700">Cálculo de la eficiencia</div>
-                                <div className="font-mono text-sm text-gray-700">
-                                    <div>H = {huffmanTable.map(row => `(${row.probability.toFixed(3)}·${row.length})`).join(' + ')} = {huffmanAvgLength.toFixed(3)} bits/símbolo</div>
-                                    <div className="mt-2">Entropía (H): <span className="font-bold">{entropy.toFixed(3)}</span> bits/símbolo</div>
-                                    <div>Eficiencia: <span className="font-bold">{((entropy / huffmanAvgLength) * 100).toFixed(1)}%</span></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-semibold text-blue-600 mb-4">Texto Comprimido</h3>
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 overflow-auto max-h-40 text-sm font-mono text-gray-800 shadow-inner">
-                                <p className="break-all">{encodedHuffman}</p>
-                            </div>
-
-                            <h3 className="text-2xl font-semibold text-blue-600 mt-6 mb-4">Texto Decodificado</h3>
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 overflow-auto max-h-40 text-base text-gray-800 shadow-inner">
-                                <p>{decodedHuffman}</p>
-                            </div>
-                        </div>
-                    </div>
                 </section>
+                    
 
                 {/* Sección de resultados de Shannon-Fano */}
                 <section className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
