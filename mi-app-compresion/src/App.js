@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
+// ✅ ARCHIVO COMPLETO MODIFICADO - App.jsx
 
-// Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
+import React, { useState, useRef } from 'react';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 
-// --- Componente principal de la aplicación ---
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
 const App = () => {
-    // Estados para el texto de entrada y salida
-    const [inputText, setInputText] = useState('');
+    const [inputText, setInputText] = useState("aaaaabcde");
     const [originalBytes, setOriginalBytes] = useState(0);
     const [encodedHuffman, setEncodedHuffman] = useState('');
     const [decodedHuffman, setDecodedHuffman] = useState('');
@@ -24,16 +23,12 @@ const App = () => {
     const [shannonFanoCompressionRatio, setShannonFanoCompressionRatio] = useState(0);
     const [shannonFanoEfficiency, setShannonFanoEfficiency] = useState(0);
 
-    const [message, setMessage] = useState(''); // Mensajes de validación o error
-    const [entropy, setEntropy] = useState(0); // Entropía teórica del texto
+    const [message, setMessage] = useState('');
+    const [entropy, setEntropy] = useState(0);
 
-    // Referencias para los canvas de Chart.js
     const compressionChartRef = useRef(null);
     const efficiencyChartRef = useRef(null);
 
-    // --- Algoritmo de Huffman ---
-
-    // Clase para nodos del árbol de Huffman
     class HuffmanNode {
         constructor(char, freq, left = null, right = null) {
             this.char = char;
@@ -43,7 +38,6 @@ const App = () => {
         }
     }
 
-    // Calcular frecuencias de caracteres
     const getFrequencies = (text) => {
         const frequencies = {};
         for (let char of text) {
@@ -52,272 +46,178 @@ const App = () => {
         return frequencies;
     };
 
-    // Construir el árbol de Huffman
     const buildHuffmanTree = (frequencies) => {
         let nodes = Object.keys(frequencies).map(char => new HuffmanNode(char, frequencies[char]));
-
-        // Ordenar nodos por frecuencia (simula una cola de prioridad)
         nodes.sort((a, b) => a.freq - b.freq);
-
         while (nodes.length > 1) {
-            // Tomar los dos nodos de menor frecuencia
             const left = nodes.shift();
             const right = nodes.shift();
-
-            // Crear un nuevo nodo padre
             const newNode = new HuffmanNode(null, left.freq + right.freq, left, right);
             nodes.push(newNode);
             nodes.sort((a, b) => a.freq - b.freq);
         }
-        return nodes[0]; // La raíz del árbol
+        return nodes[0];
     };
 
-    // Generar códigos de Huffman recorriendo el árbol
     const generateHuffmanCodes = (node, currentCode = '', codes = {}) => {
         if (node === null) return;
-
         if (node.char !== null) {
             codes[node.char] = currentCode;
             return;
         }
-
         generateHuffmanCodes(node.left, currentCode + '0', codes);
         generateHuffmanCodes(node.right, currentCode + '1', codes);
         return codes;
     };
 
-    // Codificar texto con Huffman
-    const encodeHuffman = (text, codes) => {
-        let encodedText = '';
-        for (let char of text) {
-            encodedText += codes[char];
-        }
-        return encodedText;
-    };
+    const encodeHuffman = (text, codes) => text.split('').map(char => codes[char]).join('');
 
-    // Decodificar texto con Huffman
     const decodeHuffman = (encodedText, tree) => {
         let decodedText = '';
         let currentNode = tree;
-
         for (let bit of encodedText) {
-            if (bit === '0') {
-                currentNode = currentNode.left;
-            } else {
-                currentNode = currentNode.right;
-            }
-
-            if (currentNode.char !== null) { // Es un nodo hoja
+            currentNode = bit === '0' ? currentNode.left : currentNode.right;
+            if (currentNode.char !== null) {
                 decodedText += currentNode.char;
-                currentNode = tree; // Reiniciar al nodo raíz
+                currentNode = tree;
             }
         }
         return decodedText;
     };
 
-    // --- Algoritmo de Shannon-Fano ---
-
-    // Función para generar códigos Shannon-Fano
     const generateShannonFanoCodes = (frequencies) => {
-        // Convertir frecuencias a un array de objetos y ordenar por frecuencia descendente
         let symbols = Object.keys(frequencies).map(char => ({ char, freq: frequencies[char], code: '' }));
         symbols.sort((a, b) => b.freq - a.freq);
 
-        // Función recursiva para dividir los símbolos y asignar códigos
-        const shannonFanoDivide = (arr) => {
+        const divide = (arr) => {
             if (arr.length <= 1) return;
-
-            let totalFreq = arr.reduce((sum, s) => sum + s.freq, 0);
-            let currentSum = 0;
-            let splitIndex = -1;
-
-            // Encontrar el punto de división óptimo
+            let total = arr.reduce((sum, s) => sum + s.freq, 0);
+            let acc = 0, splitIndex = -1;
             for (let i = 0; i < arr.length - 1; i++) {
-                currentSum += arr[i].freq;
-                if (currentSum >= totalFreq / 2) {
-                    splitIndex = i;
-                    break;
-                }
+                acc += arr[i].freq;
+                if (acc >= total / 2) { splitIndex = i; break; }
             }
-
-            // Si no se encuentra un punto de división claro, asignar a partes iguales o como sea posible
-            if (splitIndex === -1) {
-                // Fallback: dividir lo más equitativamente posible
-                splitIndex = Math.floor(arr.length / 2) - 1;
-                if (splitIndex < 0) splitIndex = 0; // Asegurarse de que al menos un elemento esté en la primera parte
-            }
-
+            if (splitIndex === -1) splitIndex = Math.floor(arr.length / 2);
             const group1 = arr.slice(0, splitIndex + 1);
             const group2 = arr.slice(splitIndex + 1);
-
-            // Asignar '0' al primer grupo y '1' al segundo
             group1.forEach(s => s.code += '0');
             group2.forEach(s => s.code += '1');
-
-            // Recursivamente aplicar a los subgrupos
-            shannonFanoDivide(group1);
-            shannonFanoDivide(group2);
+            divide(group1);
+            divide(group2);
         };
 
-        shannonFanoDivide(symbols);
+        divide(symbols);
         return symbols;
     };
 
-    // Codificar texto con Shannon-Fano
-    const encodeShannonFano = (text, codesMap) => {
-        let encodedText = '';
-        for (let char of text) {
-            encodedText += codesMap[char];
-        }
-        return encodedText;
-    };
+    const encodeShannonFano = (text, codesMap) => text.split('').map(char => codesMap[char]).join('');
 
-    // Decodificar texto con Shannon-Fano
     const decodeShannonFano = (encodedText, codesMap) => {
-        let decodedText = '';
-        let currentCode = '';
-        const reverseCodesMap = Object.fromEntries(Object.entries(codesMap).map(([key, value]) => [value, key]));
-
+        let decoded = '', buffer = '';
+        const reverseMap = Object.fromEntries(Object.entries(codesMap).map(([k, v]) => [v, k]));
         for (let bit of encodedText) {
-            currentCode += bit;
-            if (reverseCodesMap[currentCode]) {
-                decodedText += reverseCodesMap[currentCode];
-                currentCode = '';
+            buffer += bit;
+            if (reverseMap[buffer]) {
+                decoded += reverseMap[buffer];
+                buffer = '';
             }
         }
-        return decodedText;
+        return decoded;
     };
 
-
-    // --- Funciones auxiliares para métricas ---
-
-    // Calcular tamaño en bits
-    const stringToBits = (str) => {
-        return str.length * 8; // Suponiendo ASCII o UTF-8 de 8 bits por carácter
+    const calculateEntropy = (frequencies, total) => {
+        return Object.values(frequencies).reduce((sum, f) => {
+            let p = f / total;
+            return p > 0 ? sum - p * Math.log2(p) : sum;
+        }, 0);
     };
 
-    // Calcular la entropía (bits por símbolo)
-    const calculateEntropy = (frequencies, totalSymbols) => {
-        let entropy = 0;
-        for (let char in frequencies) {
-            const prob = frequencies[char] / totalSymbols;
-            if (prob > 0) {
-                entropy -= prob * Math.log2(prob);
-            }
-        }
-        return entropy;
+    const calculateAverageCodeLength = (frequencies, codes, total) => {
+        return Object.keys(frequencies).reduce((sum, char) => {
+            const p = frequencies[char] / total;
+            return sum + p * codes[char].length;
+        }, 0);
     };
 
-    // Calcular longitud promedio del código
-    const calculateAverageCodeLength = (frequencies, codes, totalSymbols) => {
-        let avgLength = 0;
-        for (let char in frequencies) {
-            const prob = frequencies[char] / totalSymbols;
-            if (codes[char]) {
-                avgLength += prob * codes[char].length;
-            }
-        }
-        return avgLength;
-    };
+    const calculateCompressionRatio = (originalBits, compressedBits) => originalBits === 0 ? 0 : (1 - (compressedBits / originalBits)) * 100;
+    const calculateEfficiency = (avgLength, entropy) => avgLength === 0 ? 0 : (entropy / avgLength) * 100;
 
-    // Calcular tasa de compresión
-    const calculateCompressionRatio = (originalBits, compressedBits) => {
-        if (originalBits === 0) return 0;
-        return (1 - (compressedBits / originalBits)) * 100;
-    };
-
-    // Calcular eficiencia
-    const calculateEfficiency = (averageCodeLength, entropy) => {
-        if (averageCodeLength === 0) return 0;
-        return (entropy / averageCodeLength) * 100;
-    };
-
-    // --- Manejo de la lógica principal de compresión/descompresión ---
     const handleCompress = () => {
-        if (!inputText) {
-            setMessage('Por favor, ingrese o cargue un texto antes de comprimir.');
-            return;
-        }
-        setMessage(''); // Limpia el mensaje al inicio de cada nueva compresión
+        if (!inputText) return setMessage('Ingrese texto.');
+        setMessage('');
 
         const frequencies = getFrequencies(inputText);
         const totalSymbols = inputText.length;
         const originalTextBytes = new TextEncoder().encode(inputText).length;
         setOriginalBytes(originalTextBytes);
 
-        // Calcular Entropía
         const calculatedEntropy = calculateEntropy(frequencies, totalSymbols);
         setEntropy(calculatedEntropy);
 
-        // --- Huffman ---
-        const huffmanTree = buildHuffmanTree(frequencies);
-        const huffmanCodes = generateHuffmanCodes(huffmanTree);
-        const encodedHuffmanText = encodeHuffman(inputText, huffmanCodes);
-        const decodedHuffmanText = decodeHuffman(encodedHuffmanText, huffmanTree);
+        // HUFFMAN
+        const tree = buildHuffmanTree(frequencies);
+        const codes = generateHuffmanCodes(tree);
+        const encoded = encodeHuffman(inputText, codes);
+        const decoded = decodeHuffman(encoded, tree);
 
-        const huffmanTableData = Object.keys(huffmanCodes).map(char => ({
-            symbol: char === '\n' ? '\\n' : char === ' ' ? 'Space' : char, // Representar saltos de línea y espacios
-            frequency: frequencies[char],
-            code: huffmanCodes[char],
-            length: huffmanCodes[char].length
+        setHuffmanTable(Object.keys(codes).map(char => {
+            const freq = frequencies[char];
+            const prob = freq / totalSymbols;
+            const code = codes[char];
+            const len = code.length;
+            return {
+                symbol: char === '\n' ? '\\n' : char === ' ' ? 'Space' : char,
+                frequency: freq,
+                probability: prob,
+                code,
+                length: len,
+                weightedLength: parseFloat((prob * len).toFixed(4))
+            };
         }));
-        setHuffmanTable(huffmanTableData);
 
-        const avgLengthHuffman = calculateAverageCodeLength(frequencies, huffmanCodes, totalSymbols);
-        setHuffmanAvgLength(avgLengthHuffman);
+        const avgLen = calculateAverageCodeLength(frequencies, codes, totalSymbols);
+        setHuffmanAvgLength(avgLen);
+        const compressedBits = encoded.length;
+        const originalBits = originalTextBytes * 8;
+        setHuffmanCompressionRatio(calculateCompressionRatio(originalBits, compressedBits));
+        setHuffmanEfficiency(calculateEfficiency(avgLen, calculatedEntropy));
+        setEncodedHuffman(encoded);
+        setDecodedHuffman(decoded);
 
-        const compressedHuffmanBits = encodedHuffmanText.length;
-        const originalTextBits = originalTextBytes * 8; // Convertir bytes a bits
-        setHuffmanCompressionRatio(calculateCompressionRatio(originalTextBits, compressedHuffmanBits));
-        setHuffmanEfficiency(calculateEfficiency(avgLengthHuffman, calculatedEntropy));
+        // SHANNON-FANO
+        const symbols = generateShannonFanoCodes(frequencies);
+        const map = symbols.reduce((acc, s) => ({ ...acc, [s.char]: s.code }), {});
+        const encodedSF = encodeShannonFano(inputText, map);
+        const decodedSF = decodeShannonFano(encodedSF, map);
 
-        setEncodedHuffman(encodedHuffmanText);
-        setDecodedHuffman(decodedHuffmanText);
-
-        // --- Shannon-Fano ---
-        const shannonFanoSymbols = generateShannonFanoCodes(frequencies);
-        const shannonFanoCodesMap = shannonFanoSymbols.reduce((acc, s) => ({ ...acc, [s.char]: s.code }), {});
-        const encodedShannonFanoText = encodeShannonFano(inputText, shannonFanoCodesMap);
-        const decodedShannonFanoText = decodeShannonFano(encodedShannonFanoText, shannonFanoCodesMap);
-
-        const shannonFanoTableData = shannonFanoSymbols.map(s => ({
-            symbol: s.char === '\n' ? '\\n' : s.char === ' ' ? 'Space' : s.char,
-            frequency: frequencies[s.char],
-            code: s.code,
-            length: s.code.length
+        setShannonFanoTable(symbols.map(s => {
+            const freq = frequencies[s.char];
+            const prob = freq / totalSymbols;
+            const len = s.code.length;
+            return {
+                symbol: s.char === '\n' ? '\\n' : s.char === ' ' ? 'Space' : s.char,
+                frequency: freq,
+                probability: prob,
+                code: s.code,
+                length: len,
+                weightedLength: parseFloat((prob * len).toFixed(4))
+            };
         }));
-        setShannonFanoTable(shannonFanoTableData);
 
-        const avgLengthShannonFano = calculateAverageCodeLength(frequencies, shannonFanoCodesMap, totalSymbols);
-        setShannonFanoAvgLength(avgLengthShannonFano);
-
-        const compressedShannonFanoBits = encodedShannonFanoText.length;
-        setShannonFanoCompressionRatio(calculateCompressionRatio(originalTextBits, compressedShannonFanoBits));
-        setShannonFanoEfficiency(calculateEfficiency(avgLengthShannonFano, calculatedEntropy));
-
-        setEncodedShannonFano(encodedShannonFanoText);
-        setDecodedShannonFano(decodedShannonFanoText);
+        const avgSF = calculateAverageCodeLength(frequencies, map, totalSymbols);
+        setShannonFanoAvgLength(avgSF);
+        setShannonFanoCompressionRatio(calculateCompressionRatio(originalBits, encodedSF.length));
+        setShannonFanoEfficiency(calculateEfficiency(avgSF, calculatedEntropy));
+        setEncodedShannonFano(encodedSF);
+        setDecodedShannonFano(decodedSF);
     };
 
-
-    // --- Manejo de la carga de archivos ---
-    const handleFileUpload = (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            if (file.type !== 'text/plain') {
-                setMessage('Por favor, cargue solo archivos .txt.');
-                return;
-            }
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                setInputText(e.target.result);
-                setMessage('');
-            };
-            reader.onerror = () => {
-                setMessage('Error al leer el archivo.');
-            };
-            reader.readAsText(file);
-        }
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => setInputText(e.target.result);
+        reader.readAsText(file);
     };
 
     // --- Datos para los gráficos de Chart.js ---
@@ -353,8 +253,8 @@ const App = () => {
         datasets: [
             {
                 label: 'Longitud Promedio del Código (bits/símbolo)',
-                data: [huffmanAvgLength.toFixed(2), shannonFanoAvgLength.toFixed(2), entropy.toFixed(2)],
-                backgroundColor: ['rgba(200, 200, 50, 0.6)', 'rgba(100, 100, 250, 0.6)', 'rgba(250, 50, 200, 0.6)'],
+                data: [ huffmanAvgLength.toFixed(4), shannonFanoAvgLength.toFixed(4), entropy.toFixed(4)],
+                backgroundColor: ['rgba(200, 200, 50, 0.6)', 'rgba(100, 100, 250, 0.6)', 'rgba(2, 2, 2, 0.6)'],
                 borderColor: ['rgba(200, 200, 50, 1)', 'rgba(100, 100, 250, 1)', 'rgba(250, 50, 200, 1)'],
                 borderWidth: 1,
             },
@@ -468,6 +368,7 @@ const App = () => {
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider rounded-tl-xl">Símbolo</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Frecuencia</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Probabilidad</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Código Binario</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Longitud</th>
                                         </tr>
@@ -477,8 +378,10 @@ const App = () => {
                                             <tr key={index} className="hover:bg-blue-50">
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.symbol}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.frequency}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability.toFixed(4)}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono break-all">{row.code}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.length}</td>
+                                                <td>{row.weightedLength.toFixed(4)}</td>
+                                               {/*  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability * row.length}</td> */}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -519,6 +422,7 @@ const App = () => {
                                         <tr>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider rounded-tl-xl">Símbolo</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Frecuencia</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Probabilidad</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Código Binario</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">Longitud</th>
                                         </tr>
@@ -528,8 +432,10 @@ const App = () => {
                                             <tr key={index} className="hover:bg-green-50">
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.symbol}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.frequency}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono break-all">{row.code}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.length}</td>
+                                                <td>{row.weightedLength.toFixed(4)}</td>
+                                               {/*  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.probability * row.length}</td> */}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -598,8 +504,8 @@ const App = () => {
                         <p className="font-semibold mb-2">Resumen de Métricas:</p>
                         <p>Tamaño Original del Texto: <span className="font-bold text-indigo-600">{originalBytes}</span> bytes</p>
                         <p>Entropía Teórica (Límite de Shannon): <span className="font-bold text-indigo-600">{entropy.toFixed(4)}</span> bits/símbolo</p>
-                        <p>Longitud Huffman Comprimido: <span className="font-bold text-blue-600">{encodedHuffman.length}</span> bits</p>
-                        <p>Longitud Shannon-Fano Comprimido: <span className="font-bold text-green-600">{encodedShannonFano.length}</span> bits</p>
+                        <p>Longitud Huffman Comprimido: <span className="font-bold text-blue-600">{encodedHuffman.length.toFixed(4)}</span> bits</p>
+                        <p>Longitud Shannon-Fano Comprimido: <span className="font-bold text-green-600">{encodedShannonFano.length.toFixed(4)}</span> bits</p>
                     </div>
                 </section>
 
